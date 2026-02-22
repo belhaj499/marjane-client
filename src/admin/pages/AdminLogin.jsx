@@ -1,6 +1,6 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../../api";
 import { saveAdminCredentials } from "../auth/adminAuth";
 
 const AdminLogin = () => {
@@ -17,8 +17,7 @@ const AdminLogin = () => {
     }
     setError("");
     try {
-      const baseURL = import.meta.env.VITE_API_URL || "http://localhost:8081";
-      await axios.get(`${baseURL}/api/products`, {
+      await api.get("/api/products", {
         params: { page: 0, size: 1 },
         auth: { username, password },
       });

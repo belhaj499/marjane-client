@@ -1,16 +1,12 @@
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8081",
-});
+﻿import api, { API } from "../api";
 
 export const buildImageUrl = (imageUrl) => {
   if (!imageUrl) return "";
   if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
     return imageUrl;
   }
-  const base = (import.meta.env.VITE_API_URL || "http://localhost:8081").replace(/\/$/, "");
-  return `${base}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+  if (!API) return imageUrl;
+  return `${API}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 };
 
 export default api;
