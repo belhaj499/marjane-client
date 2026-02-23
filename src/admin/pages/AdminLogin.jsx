@@ -11,20 +11,35 @@ const AdminLogin = () => {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+
+    const configuredApi = import.meta.env.VITE_API_URL;
+    if (!configuredApi) {
+      setError("API non configuree. Ajoutez VITE_API_URL dans Render.");
+      return;
+    }
+
     if (!username || !password) {
       setError("Entrez le nom d'utilisateur et le mot de passe");
       return;
     }
+
     setError("");
     try {
-      await api.get("/api/products", {
+      // Validate against an admin-protected endpoint.
+      await api.get("/api/orders", {
         params: { page: 0, size: 1 },
         auth: { username, password },
       });
+
       saveAdminCredentials(username, password);
       navigate("/admin/products");
-    } catch {
-      setError("Identifiants invalides");
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        setError("Identifiants invalides");
+      } else {
+        setError("Connexion serveur impossible. Verifiez VITE_API_URL et CORS backend.");
+      }
     }
   };
 
