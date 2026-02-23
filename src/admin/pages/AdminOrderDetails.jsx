@@ -48,7 +48,7 @@ const AdminOrderDetails = () => {
       <p>Client: {order.customerName}</p>
       <p>Telephone: {order.phone}</p>
       <p>Adresse: {order.address}</p>
-      <p>Total: ${Number(order.total).toFixed(2)}</p>
+      <p>Total: {Number(order.total).toFixed(2)} DH</p>
 
       <div className="field">
         <label>Mettre a jour le statut</label>
@@ -94,9 +94,9 @@ const AdminOrderDetails = () => {
                       )}
                     </td>
                     <td>{i.productName}</td>
-                    <td>${Number(i.unitPrice).toFixed(2)}</td>
+                    <td>{Number(i.unitPrice).toFixed(2)} DH</td>
                     <td>{i.quantity}</td>
-                    <td>${Number(i.lineTotal).toFixed(2)}</td>
+                    <td>{Number(i.lineTotal).toFixed(2)} DH</td>
                   </tr>
                 ))}
               </tbody>
