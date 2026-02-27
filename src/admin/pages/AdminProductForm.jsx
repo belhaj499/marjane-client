@@ -4,7 +4,7 @@ import {
   createAdminProduct,
   getAdminProductById,
   updateAdminProduct,
-  uploadAdminProductImage,
+  uploadAdminProductImages,
 } from "../api/adminProducts";
 import { buildImageUrl } from "../../api/axios";
 import {
@@ -26,6 +26,23 @@ const emptyForm = {
   volumeMl: 0,
   description: "",
   active: true,
+};
+
+const resolveImages = (product) => {
+  const fromApi = Array.isArray(product?.imageUrls) ? product.imageUrls.filter(Boolean) : [];
+  if (fromApi.length > 0) return fromApi;
+
+  const fromDescription = extractImageUrls(product?.description);
+  if (fromDescription.length > 0) return fromDescription;
+
+  return product?.imageUrl ? [product.imageUrl] : [];
+};
+
+const areSameImages = (a = [], b = []) => {
+  const left = (a || []).filter(Boolean);
+  const right = (b || []).filter(Boolean);
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
 };
 
 const AdminProductForm = () => {
@@ -50,7 +67,7 @@ const AdminProductForm = () => {
       .then((res) => {
         const tags = extractSeasonTags(res?.description);
         const wear = extractWearTags(res?.description);
-        const images = extractImageUrls(res?.description);
+        const images = resolveImages(res);
         const cleanedDescription = stripProductMeta(res?.description);
         const next = { ...res, description: cleanedDescription };
         setForm(next);
@@ -59,8 +76,8 @@ const AdminProductForm = () => {
         setInitialSeasonTags(tags);
         setWearTags(wear);
         setInitialWearTags(wear);
-        setImageUrls(images.length > 0 ? images : res?.imageUrl ? [res.imageUrl] : []);
-        setInitialImageUrls(images.length > 0 ? images : res?.imageUrl ? [res.imageUrl] : []);
+        setImageUrls(images);
+        setInitialImageUrls(images);
       })
       .finally(() => setLoading(false));
   }, [id, isEdit]);
@@ -85,8 +102,9 @@ const AdminProductForm = () => {
 
   const buildPayload = () => ({
     ...form,
-    description: attachProductMeta(form.description, seasonTags, wearTags, imageUrls),
+    description: attachProductMeta(String(form.description || "").trim(), seasonTags, wearTags, []),
     imageUrl: imageUrls[0] || form.imageUrl || "",
+    imageUrls,
     price: Number(form.price),
     stock: Number(form.stock),
     volumeMl: Number(form.volumeMl),
@@ -103,6 +121,7 @@ const AdminProductForm = () => {
       "description",
       "active",
       "imageUrl",
+      "imageUrls",
     ];
     const changed = {};
     keys.forEach((key) => {
@@ -123,27 +142,34 @@ const AdminProductForm = () => {
         const previous = {
           ...initialForm,
           description: attachProductMeta(
-            initialForm.description,
+            String(initialForm.description || "").trim(),
             initialSeasonTags,
             initialWearTags,
-            initialImageUrls
+            []
           ),
           imageUrl: initialImageUrls[0] || initialForm.imageUrl || "",
+          imageUrls: initialImageUrls,
           price: Number(initialForm.price),
           stock: Number(initialForm.stock),
           volumeMl: Number(initialForm.volumeMl),
         };
         const changedPayload = buildChangedPayload(payload, previous);
-        if (Object.keys(changedPayload).length === 0) {
+        const galleryChanged = !areSameImages(imageUrls, initialImageUrls);
+
+        if (Object.keys(changedPayload).length === 0 && !galleryChanged) {
           setMessage("Aucune modification detectee");
           setLoading(false);
           return;
         }
-        const updated = await updateAdminProduct(id, changedPayload);
+        let updated = null;
+        if (Object.keys(changedPayload).length > 0 || galleryChanged) {
+          const payloadWithGallery = { ...changedPayload, imageUrls };
+          updated = await updateAdminProduct(id, payloadWithGallery);
+        }
         if (updated) {
           const tags = extractSeasonTags(updated?.description);
           const wear = extractWearTags(updated?.description);
-          const images = extractImageUrls(updated?.description);
+          const images = resolveImages(updated);
           const cleanedDescription = stripProductMeta(updated?.description);
           const next = { ...updated, description: cleanedDescription };
           setForm(next);
@@ -152,13 +178,13 @@ const AdminProductForm = () => {
           setInitialSeasonTags(tags);
           setWearTags(wear);
           setInitialWearTags(wear);
-          setImageUrls(images.length > 0 ? images : updated?.imageUrl ? [updated.imageUrl] : []);
-          setInitialImageUrls(images.length > 0 ? images : updated?.imageUrl ? [updated.imageUrl] : []);
+          setImageUrls(images);
+          setInitialImageUrls(images);
         } else {
           const refreshed = await getAdminProductById(id);
           const tags = extractSeasonTags(refreshed?.description);
           const wear = extractWearTags(refreshed?.description);
-          const images = extractImageUrls(refreshed?.description);
+          const images = resolveImages(refreshed);
           const cleanedDescription = stripProductMeta(refreshed?.description);
           const next = { ...refreshed, description: cleanedDescription };
           setForm(next);
@@ -167,8 +193,8 @@ const AdminProductForm = () => {
           setInitialSeasonTags(tags);
           setWearTags(wear);
           setInitialWearTags(wear);
-          setImageUrls(images.length > 0 ? images : refreshed?.imageUrl ? [refreshed.imageUrl] : []);
-          setInitialImageUrls(images.length > 0 ? images : refreshed?.imageUrl ? [refreshed.imageUrl] : []);
+          setImageUrls(images);
+          setInitialImageUrls(images);
         }
         setMessage("Produit mis a jour");
         navigate("/admin/products", { replace: true });
@@ -190,7 +216,6 @@ const AdminProductForm = () => {
     setLoading(true);
     try {
       let productId = id;
-      const primaryBeforeUpload = imageUrls[0] || form.imageUrl || "";
 
       if (!productId) {
         if (!form.name || !form.brand) {
@@ -202,49 +227,42 @@ const AdminProductForm = () => {
         productId = created.id;
         const tags = extractSeasonTags(created?.description);
         const wear = extractWearTags(created?.description);
-        const images = extractImageUrls(created?.description);
+        const images = resolveImages(created);
         const cleanedDescription = stripProductMeta(created?.description);
         setForm({ ...created, description: cleanedDescription });
         setSeasonTags(tags);
         setInitialSeasonTags(tags);
         setWearTags(wear);
         setInitialWearTags(wear);
-        setImageUrls(images.length > 0 ? images : created?.imageUrl ? [created.imageUrl] : []);
-        setInitialImageUrls(images.length > 0 ? images : created?.imageUrl ? [created.imageUrl] : []);
+        setImageUrls(images);
+        setInitialImageUrls(images);
         if (!isEdit) navigate(`/admin/products/${created.id}/edit`, { replace: true });
       }
 
-      const uploadedUrls = [];
-      for (const file of files) {
-        const res = await uploadAdminProductImage(productId, file);
-        if (res?.imageUrl) uploadedUrls.push(res.imageUrl);
-      }
+      const updated = await uploadAdminProductImages(productId, files);
+      const tags = extractSeasonTags(updated?.description);
+      const wear = extractWearTags(updated?.description);
+      const extracted = extractImageUrls(updated?.description);
+      const cleanedDescription = stripProductMeta(updated?.description);
+      const galleryFromApi = Array.isArray(updated?.imageUrls) ? updated.imageUrls : [];
+      const nextImages = galleryFromApi.length > 0
+        ? galleryFromApi
+        : extracted.length > 0
+          ? extracted
+          : updated?.imageUrl
+            ? [updated.imageUrl]
+            : [];
+      const next = { ...updated, description: cleanedDescription };
 
-      if (uploadedUrls.length > 0) {
-        const merged = [...new Set([...imageUrls, ...uploadedUrls])];
-        const stablePrimary = primaryBeforeUpload || merged[0] || "";
-        setImageUrls(merged);
-        setForm((curr) => ({ ...curr, imageUrl: stablePrimary }));
-
-        // The upload endpoint may overwrite product.imageUrl with the last uploaded file.
-        // Force keeping the original primary image so cards/list stay stable.
-        if (stablePrimary) {
-          await updateAdminProduct(productId, { imageUrl: stablePrimary });
-        }
-      } else {
-        const refreshed = await getAdminProductById(productId);
-        const tags = extractSeasonTags(refreshed?.description);
-        const wear = extractWearTags(refreshed?.description);
-        const images = extractImageUrls(refreshed?.description);
-        const cleanedDescription = stripProductMeta(refreshed?.description);
-        setForm({ ...refreshed, description: cleanedDescription });
-        setSeasonTags(tags);
-        setInitialSeasonTags(tags);
-        setWearTags(wear);
-        setInitialWearTags(wear);
-        setImageUrls(images.length > 0 ? images : refreshed?.imageUrl ? [refreshed.imageUrl] : []);
-      }
-      setMessage(uploadedUrls.length > 1 ? "Images telechargees" : "Image telechargee");
+      setForm(next);
+      setInitialForm(next);
+      setSeasonTags(tags);
+      setInitialSeasonTags(tags);
+      setWearTags(wear);
+      setInitialWearTags(wear);
+      setImageUrls(nextImages);
+      setInitialImageUrls(nextImages);
+      setMessage(files.length > 1 ? "Images telechargees et enregistrees." : "Image telechargee et enregistree.");
     } catch {
       setMessage("Echec upload image");
     } finally {

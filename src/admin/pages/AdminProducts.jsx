@@ -16,6 +16,7 @@ const AdminProducts = () => {
   const [page, setPage] = useState(0);
   const [data, setData] = useState({ content: [], totalPages: 0, number: 0 });
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -52,8 +53,11 @@ const AdminProducts = () => {
   }, [gender, brand, sort]);
 
   const onDelete = async (id) => {
+    if (deletingId !== null) return;
     if (!confirm("Supprimer ce produit ?")) return;
     setMessage("");
+    setError("");
+    setDeletingId(id);
     try {
       await deleteAdminProduct(id);
       setMessage("Produit supprime");
@@ -64,6 +68,8 @@ const AdminProducts = () => {
         err?.response?.data?.error ||
         "Suppression refusee par le serveur (produit lie a des commandes).";
       setError(backendMessage);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -124,8 +130,21 @@ const AdminProducts = () => {
                     <td>{p.stock}</td>
                     <td>{p.active ? "Oui" : "Non"}</td>
                     <td>
-                      <Link className="btn" to={`/admin/products/${p.id}/edit`}>Editer</Link>{" "}
-                      <button className="btn" onClick={() => onDelete(p.id)}>Supprimer</button>
+                      <Link
+                        className="btn"
+                        to={`/admin/products/${p.id}/edit`}
+                        aria-disabled={deletingId === p.id}
+                        style={deletingId === p.id ? { pointerEvents: "none", opacity: 0.6 } : undefined}
+                      >
+                        Editer
+                      </Link>{" "}
+                      <button
+                        className="btn"
+                        onClick={() => onDelete(p.id)}
+                        disabled={deletingId !== null}
+                      >
+                        {deletingId === p.id ? "Suppression..." : "Supprimer"}
+                      </button>
                     </td>
                   </tr>
                 ))}

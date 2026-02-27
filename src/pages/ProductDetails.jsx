@@ -42,6 +42,11 @@ const ProductDetails = () => {
   }, [id]);
 
   const imageList = (() => {
+    const fromApi = Array.isArray(product?.imageUrls)
+      ? product.imageUrls.map((url) => buildImageUrl(url)).filter(Boolean)
+      : [];
+    if (fromApi.length > 0) return fromApi;
+
     const fromMeta = extractImageUrls(product?.description).map((url) => buildImageUrl(url));
     if (fromMeta.length > 0) return fromMeta;
     return product?.imageUrl ? [buildImageUrl(product.imageUrl)] : [];

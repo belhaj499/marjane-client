@@ -6,7 +6,10 @@ import { extractSeasonTags, extractWearTags } from "../utils/productSeasons";
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
   const location = useLocation();
-  const image = buildImageUrl(product.imageUrl);
+  const primaryImage = Array.isArray(product?.imageUrls) && product.imageUrls.length > 0
+    ? product.imageUrls[0]
+    : product?.imageUrl;
+  const image = buildImageUrl(primaryImage);
   const seasons = extractSeasonTags(product.description).slice(0, 2);
   const wearTags = extractWearTags(product.description).slice(0, 2);
 
