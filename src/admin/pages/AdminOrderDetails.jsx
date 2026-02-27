@@ -44,11 +44,27 @@ const AdminOrderDetails = () => {
     <div className="page">
       <Link className="btn" to="/admin/orders">Retour</Link>
       <h1>Commande #{order.id}</h1>
-      <p><StatusBadge status={order.status} /></p>
-      <p>Client: {order.customerName}</p>
-      <p>Telephone: {order.phone}</p>
-      <p>Adresse: {order.address}</p>
-      <p>Total: {Number(order.total).toFixed(2)} DH</p>
+
+      <section className="admin-order-summary">
+        <div className="admin-order-head">
+          <StatusBadge status={order.status} />
+          <p className="admin-order-total">{Number(order.total).toFixed(2)} DH</p>
+        </div>
+        <div className="admin-order-meta">
+          <p>
+            <span className="admin-order-label">Client</span>
+            <span className="admin-order-value">{order.customerName}</span>
+          </p>
+          <p>
+            <span className="admin-order-label">Telephone</span>
+            <span className="admin-order-value">{order.phone}</span>
+          </p>
+          <p>
+            <span className="admin-order-label">Adresse</span>
+            <span className="admin-order-value">{order.address}</span>
+          </p>
+        </div>
+      </section>
 
       <div className="field">
         <label>Mettre a jour le statut</label>

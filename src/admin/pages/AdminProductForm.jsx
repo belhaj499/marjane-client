@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
   createAdminProduct,
@@ -7,6 +7,15 @@ import {
   uploadAdminProductImage,
 } from "../api/adminProducts";
 import { buildImageUrl } from "../../api/axios";
+import {
+  SEASON_OPTIONS,
+  WEAR_OPTIONS,
+  attachProductMeta,
+  extractSeasonTags,
+  extractWearTags,
+  extractImageUrls,
+  stripProductMeta,
+} from "../../utils/productSeasons";
 
 const emptyForm = {
   name: "",
@@ -25,6 +34,12 @@ const AdminProductForm = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
   const [initialForm, setInitialForm] = useState(emptyForm);
+  const [seasonTags, setSeasonTags] = useState([]);
+  const [initialSeasonTags, setInitialSeasonTags] = useState([]);
+  const [wearTags, setWearTags] = useState([]);
+  const [initialWearTags, setInitialWearTags] = useState([]);
+  const [imageUrls, setImageUrls] = useState([]);
+  const [initialImageUrls, setInitialImageUrls] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -33,8 +48,19 @@ const AdminProductForm = () => {
     setLoading(true);
     getAdminProductById(id)
       .then((res) => {
-        setForm(res);
-        setInitialForm(res);
+        const tags = extractSeasonTags(res?.description);
+        const wear = extractWearTags(res?.description);
+        const images = extractImageUrls(res?.description);
+        const cleanedDescription = stripProductMeta(res?.description);
+        const next = { ...res, description: cleanedDescription };
+        setForm(next);
+        setInitialForm(next);
+        setSeasonTags(tags);
+        setInitialSeasonTags(tags);
+        setWearTags(wear);
+        setInitialWearTags(wear);
+        setImageUrls(images.length > 0 ? images : res?.imageUrl ? [res.imageUrl] : []);
+        setInitialImageUrls(images.length > 0 ? images : res?.imageUrl ? [res.imageUrl] : []);
       })
       .finally(() => setLoading(false));
   }, [id, isEdit]);
@@ -47,8 +73,20 @@ const AdminProductForm = () => {
     }));
   };
 
+  const toggleSeason = (season) => {
+    setSeasonTags((prev) =>
+      prev.includes(season) ? prev.filter((s) => s !== season) : [...prev, season]
+    );
+  };
+
+  const toggleWear = (wear) => {
+    setWearTags((prev) => (prev.includes(wear) ? prev.filter((w) => w !== wear) : [...prev, wear]));
+  };
+
   const buildPayload = () => ({
     ...form,
+    description: attachProductMeta(form.description, seasonTags, wearTags, imageUrls),
+    imageUrl: imageUrls[0] || form.imageUrl || "",
     price: Number(form.price),
     stock: Number(form.stock),
     volumeMl: Number(form.volumeMl),
@@ -84,6 +122,13 @@ const AdminProductForm = () => {
       if (isEdit) {
         const previous = {
           ...initialForm,
+          description: attachProductMeta(
+            initialForm.description,
+            initialSeasonTags,
+            initialWearTags,
+            initialImageUrls
+          ),
+          imageUrl: initialImageUrls[0] || initialForm.imageUrl || "",
           price: Number(initialForm.price),
           stock: Number(initialForm.stock),
           volumeMl: Number(initialForm.volumeMl),
@@ -96,12 +141,34 @@ const AdminProductForm = () => {
         }
         const updated = await updateAdminProduct(id, changedPayload);
         if (updated) {
-          setForm(updated);
-          setInitialForm(updated);
+          const tags = extractSeasonTags(updated?.description);
+          const wear = extractWearTags(updated?.description);
+          const images = extractImageUrls(updated?.description);
+          const cleanedDescription = stripProductMeta(updated?.description);
+          const next = { ...updated, description: cleanedDescription };
+          setForm(next);
+          setInitialForm(next);
+          setSeasonTags(tags);
+          setInitialSeasonTags(tags);
+          setWearTags(wear);
+          setInitialWearTags(wear);
+          setImageUrls(images.length > 0 ? images : updated?.imageUrl ? [updated.imageUrl] : []);
+          setInitialImageUrls(images.length > 0 ? images : updated?.imageUrl ? [updated.imageUrl] : []);
         } else {
           const refreshed = await getAdminProductById(id);
-          setForm(refreshed);
-          setInitialForm(refreshed);
+          const tags = extractSeasonTags(refreshed?.description);
+          const wear = extractWearTags(refreshed?.description);
+          const images = extractImageUrls(refreshed?.description);
+          const cleanedDescription = stripProductMeta(refreshed?.description);
+          const next = { ...refreshed, description: cleanedDescription };
+          setForm(next);
+          setInitialForm(next);
+          setSeasonTags(tags);
+          setInitialSeasonTags(tags);
+          setWearTags(wear);
+          setInitialWearTags(wear);
+          setImageUrls(images.length > 0 ? images : refreshed?.imageUrl ? [refreshed.imageUrl] : []);
+          setInitialImageUrls(images.length > 0 ? images : refreshed?.imageUrl ? [refreshed.imageUrl] : []);
         }
         setMessage("Produit mis a jour");
         navigate("/admin/products", { replace: true });
@@ -117,12 +184,13 @@ const AdminProductForm = () => {
   };
 
   const onUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     setMessage("");
     setLoading(true);
     try {
       let productId = id;
+      const primaryBeforeUpload = imageUrls[0] || form.imageUrl || "";
 
       if (!productId) {
         if (!form.name || !form.brand) {
@@ -132,23 +200,65 @@ const AdminProductForm = () => {
         }
         const created = await createAdminProduct(buildPayload());
         productId = created.id;
-        setForm(created);
+        const tags = extractSeasonTags(created?.description);
+        const wear = extractWearTags(created?.description);
+        const images = extractImageUrls(created?.description);
+        const cleanedDescription = stripProductMeta(created?.description);
+        setForm({ ...created, description: cleanedDescription });
+        setSeasonTags(tags);
+        setInitialSeasonTags(tags);
+        setWearTags(wear);
+        setInitialWearTags(wear);
+        setImageUrls(images.length > 0 ? images : created?.imageUrl ? [created.imageUrl] : []);
+        setInitialImageUrls(images.length > 0 ? images : created?.imageUrl ? [created.imageUrl] : []);
+        if (!isEdit) navigate(`/admin/products/${created.id}/edit`, { replace: true });
       }
 
-      const res = await uploadAdminProductImage(productId, file);
-      if (res?.imageUrl) {
-        setForm((prev) => ({ ...prev, imageUrl: res.imageUrl }));
+      const uploadedUrls = [];
+      for (const file of files) {
+        const res = await uploadAdminProductImage(productId, file);
+        if (res?.imageUrl) uploadedUrls.push(res.imageUrl);
+      }
+
+      if (uploadedUrls.length > 0) {
+        const merged = [...new Set([...imageUrls, ...uploadedUrls])];
+        const stablePrimary = primaryBeforeUpload || merged[0] || "";
+        setImageUrls(merged);
+        setForm((curr) => ({ ...curr, imageUrl: stablePrimary }));
+
+        // The upload endpoint may overwrite product.imageUrl with the last uploaded file.
+        // Force keeping the original primary image so cards/list stay stable.
+        if (stablePrimary) {
+          await updateAdminProduct(productId, { imageUrl: stablePrimary });
+        }
       } else {
         const refreshed = await getAdminProductById(productId);
-        setForm(refreshed);
+        const tags = extractSeasonTags(refreshed?.description);
+        const wear = extractWearTags(refreshed?.description);
+        const images = extractImageUrls(refreshed?.description);
+        const cleanedDescription = stripProductMeta(refreshed?.description);
+        setForm({ ...refreshed, description: cleanedDescription });
+        setSeasonTags(tags);
+        setInitialSeasonTags(tags);
+        setWearTags(wear);
+        setInitialWearTags(wear);
+        setImageUrls(images.length > 0 ? images : refreshed?.imageUrl ? [refreshed.imageUrl] : []);
       }
-      setMessage("Image telechargee");
-      if (!isEdit) navigate("/admin/products", { replace: true });
+      setMessage(uploadedUrls.length > 1 ? "Images telechargees" : "Image telechargee");
     } catch {
       setMessage("Echec upload image");
     } finally {
       setLoading(false);
+      e.target.value = "";
     }
+  };
+
+  const removeImage = (imageToRemove) => {
+    setImageUrls((prev) => {
+      const next = prev.filter((url) => url !== imageToRemove);
+      setForm((curr) => ({ ...curr, imageUrl: next[0] || "" }));
+      return next;
+    });
   };
 
   return (
@@ -180,12 +290,47 @@ const AdminProductForm = () => {
         </div>
         <div className="field">
           <label>Volume (ml)</label>
-          <input name="volumeMl" type="number" value={form.volumeMl} onChange={onChange} />
+          <select name="volumeMl" value={form.volumeMl} onChange={onChange}>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
         </div>
         <div className="field">
           <label>Description</label>
           <textarea name="description" value={form.description || ""} onChange={onChange} />
         </div>
+
+        <div className="field">
+          <label>Saisons recommandees</label>
+          <div className="season-checks">
+            {SEASON_OPTIONS.map((s) => (
+              <label key={s} className="season-check">
+                <input
+                  type="checkbox"
+                  checked={seasonTags.includes(s)}
+                  onChange={() => toggleSeason(s)}
+                />
+                {s}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="field">
+          <label>Quand le porter</label>
+          <div className="season-checks">
+            {WEAR_OPTIONS.map((w) => (
+              <label key={w} className="season-check">
+                <input
+                  type="checkbox"
+                  checked={wearTags.includes(w)}
+                  onChange={() => toggleWear(w)}
+                />
+                {w}
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="field">
           <label>
             <input
@@ -199,17 +344,26 @@ const AdminProductForm = () => {
         </div>
 
         <div className="field">
-          <label>Ajouter une photo</label>
-          {form.imageUrl && (
-            <img
-              src={buildImageUrl(form.imageUrl)}
-              alt="Produit"
-              width="120"
-              style={{ display: "block", marginBottom: 8 }}
-            />
+          <label>Ajouter des photos</label>
+          {imageUrls.length > 0 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+              {imageUrls.map((url, idx) => (
+                <div key={`${url}-${idx}`} style={{ position: "relative" }}>
+                  <img src={buildImageUrl(url)} alt={`Produit ${idx + 1}`} width="90" height="90" style={{ objectFit: "cover", borderRadius: 10, border: "1px solid #e6d7cc" }} />
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => removeImage(url)}
+                    style={{ position: "absolute", right: 4, top: 4, padding: "0.15rem 0.45rem", fontSize: 12 }}
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
-          <input type="file" accept="image/*" onChange={onUpload} />
-          <small className="muted">Choisir un fichier image (jpg, png...)</small>
+          <input type="file" accept="image/*" multiple onChange={onUpload} />
+          <small className="muted">Tu peux selectionner plusieurs images. N'oublie pas Enregistrer.</small>
         </div>
 
         <div className="card-actions">

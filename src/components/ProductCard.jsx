@@ -1,10 +1,14 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { buildImageUrl } from "../api/axios";
 import { useCart } from "../context/CartContext";
+import { extractSeasonTags, extractWearTags } from "../utils/productSeasons";
 
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
+  const location = useLocation();
   const image = buildImageUrl(product.imageUrl);
+  const seasons = extractSeasonTags(product.description).slice(0, 2);
+  const wearTags = extractWearTags(product.description).slice(0, 2);
 
   return (
     <div className="card">
@@ -22,17 +26,35 @@ const ProductCard = ({ product }) => {
       </div>
       <div className="card-body">
         <h3 className="card-title">{product.name}</h3>
-        <p className="card-sub">{product.brand} - {product.gender}</p>
+        <p className="card-sub">
+          {product.brand} - {product.gender}
+        </p>
+        {seasons.length > 0 && (
+          <div className="season-tags">
+            {seasons.map((s) => (
+              <span key={s} className="season-tag">
+                {s}
+              </span>
+            ))}
+          </div>
+        )}
+        {wearTags.length > 0 && (
+          <div className="season-tags">
+            {wearTags.map((w) => (
+              <span key={w} className="season-tag season-tag-alt">
+                {w}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="card-row">
           <span className="price">{product.price.toFixed(2)} DH</span>
         </div>
         <div className="card-actions">
-          <Link className="btn" to={`/products/${product.id}`}>Voir</Link>
-          <button
-            className="btn btn-primary"
-            onClick={() => addToCart(product, 1)}
-            disabled={!product.available}
-          >
+          <Link className="btn" to={`/products/${product.id}`} state={{ from: `${location.pathname}${location.search}` }}>
+            Voir
+          </Link>
+          <button className="btn btn-primary" onClick={() => addToCart(product, 1)} disabled={!product.available}>
             Ajouter
           </button>
         </div>

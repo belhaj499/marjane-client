@@ -7,7 +7,7 @@ import dImage from "../assets/d.jpg";
 const heroImages = [
   {
     name: "YSL",
-    url: yslBlack,
+    url: strongerWithYou,
   },
   {
     name: "Le Beau",
@@ -15,12 +15,11 @@ const heroImages = [
   },
   {
     name: "Stronger With You",
-    url: strongerWithYou,
+    url: yslBlack,
   },
 ];
 
 const galleryItems = [
-  
   {
     image: "https://upload.wikimedia.org/wikipedia/commons/e/ef/Coco_mademoiselle.jpg",
     text: "Coco Mademoiselle",
@@ -31,28 +30,28 @@ const galleryItems = [
   },
   {
     image: yslBlack,
-    text: "YSL",
+    text: "Stronger With You",
   },
   {
     image: dImage,
-    text: "Le Beau",
+    text: "Le Male",
   },
   {
     image: strongerWithYou,
-    text: "Stronger With You",
+    text: "YSL",
   },
 ];
 
 const Home = () => {
   return (
     <div className="page">
-      <div className="hero hero-dynamic">      <div className="hero-content">
-        <p className="eyebrow">Collection 2026</p>
-        <h1>Kadiri Parfum</h1>
-        <p>Decouvrez des parfums premium pour lui et elle.</p>
-         
-      </div>
-      <div className="hero-bottles">
+      <div className="hero hero-dynamic">
+        <div className="hero-content">
+          <p className="eyebrow">Collection 2026</p>
+          <h1>Kadiri Parfum</h1>
+          <p>Decouvrez des parfums premium pour lui et elle.</p>
+        </div>
+        <div className="hero-bottles">
           <div className="hero-images">
             {heroImages.map((item, idx) => (
               <img
@@ -164,4 +163,3 @@ const Home = () => {
 };
 
 export default Home;
-
