@@ -3,9 +3,20 @@ import { buildImageUrl } from "../api/axios";
 import { useCart } from "../context/CartContext";
 import { extractSeasonTags, extractWearTags } from "../utils/productSeasons";
 
-const ProductCard = ({ product }) => {
+const ProductCard = ({ product, fromPath }) => {
   const { addToCart } = useCart();
   const location = useLocation();
+  const from =
+    typeof fromPath === "string" && fromPath.startsWith("/")
+      ? fromPath
+      : `${location.pathname}${location.search}`;
+  const handleSee = () => {
+    try {
+      sessionStorage.setItem("last-products-route", from);
+    } catch {
+      // Ignore storage failures.
+    }
+  };
   const primaryImage = Array.isArray(product?.imageUrls) && product.imageUrls.length > 0
     ? product.imageUrls[0]
     : product?.imageUrl;
@@ -54,7 +65,22 @@ const ProductCard = ({ product }) => {
           <span className="price">{product.price.toFixed(2)} DH</span>
         </div>
         <div className="card-actions">
-          <Link className="btn" to={`/products/${product.id}`} state={{ from: `${location.pathname}${location.search}` }}>
+          {/*
+            Keep the list route in query string too so refresh on details page
+            still knows where to go back.
+          */}
+          <Link
+            className="btn"
+            to={{
+              pathname: `/products/${product.id}`,
+              search: `?from=${encodeURIComponent(from)}`,
+            }}
+            onClick={handleSee}
+            state={{
+              from,
+              product,
+            }}
+          >
             Voir
           </Link>
           <button className="btn btn-primary" onClick={() => addToCart(product, 1)} disabled={!product.available}>

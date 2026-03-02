@@ -14,5 +14,13 @@ export default defineConfig({
   plugins: [react(), redirectsPlugin],
   build: {
     outDir: "dist",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          router: ["react-router-dom"],
+          admin: ["./src/admin/pages/AdminProducts.jsx", "./src/admin/pages/AdminProductForm.jsx", "./src/admin/pages/AdminOrders.jsx", "./src/admin/pages/AdminOrderDetails.jsx", "./src/admin/components/AdminLayout.jsx"],
+        },
+      },
+    },
   },
 });

@@ -1,4 +1,4 @@
-const AdminFilters = ({ gender, setGender, brand, setBrand, sort, setSort, size, setSize }) => {
+const AdminFilters = ({ gender, setGender, brand, setBrand, sort, setSort }) => {
   return (
     <div className="filters">
       <div className="field">
