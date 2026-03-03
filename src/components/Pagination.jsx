@@ -1,4 +1,4 @@
-const Pagination = ({ page, totalPages, onPageChange }) => {
+const Pagination = ({ page, totalPages, onPageChange, loading = false }) => {
   if (totalPages <= 1) return null;
 
   const pages = Array.from({ length: totalPages }, (_, i) => i);
@@ -8,7 +8,7 @@ const Pagination = ({ page, totalPages, onPageChange }) => {
       <button
         className="btn"
         onClick={() => onPageChange(Math.max(page - 1, 0))}
-        disabled={page === 0}
+        disabled={loading || page === 0}
       >
         Prec
       </button>
@@ -17,6 +17,7 @@ const Pagination = ({ page, totalPages, onPageChange }) => {
           key={p}
           className={p === page ? "btn btn-primary" : "btn"}
           onClick={() => onPageChange(p)}
+          disabled={loading}
         >
           {p + 1}
         </button>
@@ -24,7 +25,7 @@ const Pagination = ({ page, totalPages, onPageChange }) => {
       <button
         className="btn"
         onClick={() => onPageChange(Math.min(page + 1, totalPages - 1))}
-        disabled={page >= totalPages - 1}
+        disabled={loading || page >= totalPages - 1}
       >
         Suiv
       </button>

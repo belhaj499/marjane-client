@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Toast from "./components/Toast";
@@ -27,6 +27,18 @@ const App = () => {
   const isAdmin = location.pathname.startsWith("/admin");
   const { toast } = useCart();
   const pageFallback = <p>Chargement...</p>;
+
+  useEffect(() => {
+    if (isAdmin) return;
+    import("./utils/productsWarmup")
+      .then(({ warmupFirstProductsPage }) =>
+        Promise.allSettled([
+          warmupFirstProductsPage({ gender: "HOMME", sort: "price,asc" }),
+          warmupFirstProductsPage({ gender: "FEMME", sort: "price,asc" }),
+        ])
+      )
+      .catch(() => {});
+  }, [isAdmin]);
 
   if (isAdmin) {
     return (

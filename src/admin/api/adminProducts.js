@@ -10,9 +10,9 @@ const cleanParams = (params) => {
   return cleaned;
 };
 
-export const getAdminProducts = async ({ page, size, gender, brand, sort }) => {
-  const params = cleanParams({ page, size, gender, brand, sort, _ts: Date.now() });
-  const res = await adminApi.get("/api/products", { params });
+export const getAdminProducts = async ({ page, size, gender, brand, sort, signal }) => {
+  const params = cleanParams({ page, size, gender, brand, sort });
+  const res = await adminApi.get("/api/products", { params, signal });
   return res.data;
 };
 

@@ -308,10 +308,15 @@ const AdminProductForm = () => {
         </div>
         <div className="field">
           <label>Volume (ml)</label>
-          <select name="volumeMl" value={form.volumeMl} onChange={onChange}>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+          <input
+            name="volumeMl"
+            type="number"
+            min="1"
+            step="1"
+            value={form.volumeMl}
+            onChange={onChange}
+            placeholder="Ex: 75"
+          />
         </div>
         <div className="field">
           <label>Description</label>

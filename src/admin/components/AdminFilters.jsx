@@ -10,12 +10,12 @@ const AdminFilters = ({ gender, setGender, brand, setBrand, sort, setSort }) => 
         </select>
       </div>
       <div className="field">
-        <label>Marque</label>
+        <label>Marque ou nom</label>
         <input
           type="text"
           value={brand}
           onChange={(e) => setBrand(e.target.value)}
-          placeholder="Dior, Chanel..."
+          placeholder="Dior, Sauvage..."
         />
       </div>
       <div className="field">

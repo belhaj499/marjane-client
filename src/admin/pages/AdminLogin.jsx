@@ -1,7 +1,8 @@
-﻿import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api";
 import { saveAdminCredentials } from "../auth/adminAuth";
+import { writeCache } from "../../utils/productsWarmup";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -9,9 +10,17 @@ const AdminLogin = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    // Warm admin chunks while user is on login screen.
+    import("../components/AdminLayout").catch(() => {});
+    import("./AdminProducts").catch(() => {});
+  }, []);
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
 
     const configuredApi = import.meta.env.VITE_API_URL;
     if (!configuredApi) {
@@ -25,9 +34,10 @@ const AdminLogin = () => {
     }
 
     setError("");
+    setSubmitting(true);
     try {
-      // Validate against an admin-protected endpoint.
-      await api.get("/api/orders", {
+      // Fast auth check, then navigate immediately.
+      await api.get("/api/products", {
         params: { page: 0, size: 1 },
         auth: { username, password },
       });
@@ -37,6 +47,21 @@ const AdminLogin = () => {
         state: { showAdminWelcome: true },
         replace: true,
       });
+
+      // Warm first admin page in background (no blocking).
+      api
+        .get("/api/products", {
+          params: { page: 0, size: 10, sort: "price,asc" },
+          auth: { username, password },
+        })
+        .then((res) => {
+          const adminFirstPageKey = "admin-products|v0|||price,asc|0|10";
+          writeCache(adminFirstPageKey, {
+            ...res.data,
+            content: res?.data?.content || [],
+          });
+        })
+        .catch(() => {});
     } catch (err) {
       const status = err?.response?.status;
       if (status === 401 || status === 403) {
@@ -44,6 +69,8 @@ const AdminLogin = () => {
       } else {
         setError("Connexion serveur impossible. Verifiez VITE_API_URL et CORS backend.");
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -51,7 +78,14 @@ const AdminLogin = () => {
     <div className="page login-page">
       <div className="login-card">
         <a className="login-back-link" href="/" aria-label="Retour accueil">
-          <span aria-hidden="true">←</span>
+          <span aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <path
+                d="M14.7 5.3a1 1 0 0 1 0 1.4L10.41 11H20a1 1 0 1 1 0 2h-9.59l4.3 4.3a1 1 0 0 1-1.41 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.4 0z"
+                fill="currentColor"
+              />
+            </svg>
+          </span>
         </a>
         <h1>Admin Login</h1>
         <form className="form" onSubmit={onSubmit}>
@@ -96,7 +130,9 @@ const AdminLogin = () => {
           </div>
           {error && <p className="error">{error}</p>}
           <div className="card-actions">
-            <button className="btn btn-primary" type="submit">Login</button>
+            <button className="btn btn-primary" type="submit" disabled={submitting}>
+              {submitting ? "Connexion..." : "Login"}
+            </button>
           </div>
         </form>
       </div>

@@ -1,13 +1,8 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import CircularGallery from "../components/CircularGallery";
 import yslBlack from "../assets/73bfcb46ab4837ac2a4eaf88412e3325.jpg";
 import strongerWithYou from "../assets/35db46d726f6a8ef9c99e1c45275135e.jpg";
 import dImage from "../assets/d.jpg";
-import {
-  warmupFirstProductsPage,
-  warmupProductsPoolInBackground,
-} from "../utils/productsWarmup";
 
 const heroImages = [
   {
@@ -48,18 +43,6 @@ const galleryItems = [
 ];
 
 const Home = () => {
-  useEffect(() => {
-    // 1) Load first page fast for instant Homme/Femme navigation.
-    Promise.allSettled([
-      warmupFirstProductsPage({ gender: "HOMME", sort: "price,asc" }),
-      warmupFirstProductsPage({ gender: "FEMME", sort: "price,asc" }),
-    ]).then(() => {
-      // 2) Then continue loading remaining pages progressively in background.
-      warmupProductsPoolInBackground({ gender: "HOMME", sort: "price,asc" });
-      warmupProductsPoolInBackground({ gender: "FEMME", sort: "price,asc" });
-    });
-  }, []);
-
   return (
     <div className="page">
       <div className="hero hero-dynamic">

@@ -1,16 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  getAdminProducts,
-  deleteAdminProduct,
-} from "../api/adminProducts";
+import { getAdminProducts, deleteAdminProduct } from "../api/adminProducts";
 import AdminPagination from "../components/AdminPagination";
 import AdminFilters from "../components/AdminFilters";
 import { buildImageUrl } from "../../api/axios";
+import {
+  ADMIN_CACHE_TTL_MS,
+  readCacheWithTtl,
+  writeCache,
+} from "../../utils/productsWarmup";
+
+const SEARCH_POOL_PAGE_SIZE = 120;
 
 const AdminProducts = () => {
   const [gender, setGender] = useState("");
-  const [brand, setBrand] = useState("");
+  const [search, setSearch] = useState("");
   const [sort, setSort] = useState("price,asc");
   const [size] = useState(10);
   const [page, setPage] = useState(0);
@@ -19,38 +23,261 @@ const AdminProducts = () => {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchPool, setSearchPool] = useState([]);
+  const [searchPoolReady, setSearchPoolReady] = useState(false);
+  const [cacheVersion, setCacheVersion] = useState(0);
 
-  const filterByBrand = (items) => {
-    const q = brand.trim().toLowerCase();
-    if (!q) return items;
-    return (items || []).filter((p) => String(p.brand || "").toLowerCase().includes(q));
+  const prevFiltersRef = useRef({
+    gender,
+    debouncedSearch,
+    sort,
+    size,
+  });
+
+  const filterBySearch = (items, query) => {
+    const q = String(query || "").trim().toLowerCase();
+    if (!q) return items || [];
+    return (items || []).filter((p) => {
+      const brandText = String(p.brand || "").toLowerCase();
+      const nameText = String(p.name || "").toLowerCase();
+      return brandText.includes(q) || nameText.includes(q);
+    });
   };
 
-  const load = () => {
-    setLoading(true);
+  const uniqueById = (items) => {
+    const seen = new Set();
+    return (items || []).filter((p) => {
+      const id = p?.id;
+      if (id === undefined || id === null) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  };
+
+  const pageCacheKey = (targetPage) =>
+    `admin-products|v${cacheVersion}|${gender}|${sort}|${targetPage}|${size}`;
+
+  const poolCacheKey = `admin-products-pool|v${cacheVersion}|${gender}|${sort}`;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setSearchPool([]);
+    setSearchPoolReady(false);
+
+    let mounted = true;
+    const cached = readCacheWithTtl(poolCacheKey, ADMIN_CACHE_TTL_MS);
+    if (cached) {
+      setSearchPool(Array.isArray(cached) ? cached : []);
+      setSearchPoolReady(true);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    const warmPool = async () => {
+      try {
+        const first = await getAdminProducts({
+          page: 0,
+          size: SEARCH_POOL_PAGE_SIZE,
+          gender,
+          brand: "",
+          sort,
+        });
+
+        if (!mounted) return;
+
+        let items = [...(first?.content || [])];
+        const totalPages = Number(first?.totalPages || 1);
+
+        for (let p = 1; p < totalPages; p += 1) {
+          const res = await getAdminProducts({
+            page: p,
+            size: SEARCH_POOL_PAGE_SIZE,
+            gender,
+            brand: "",
+            sort,
+          });
+          if (!mounted) return;
+          items = items.concat(res?.content || []);
+        }
+
+        const uniqueItems = uniqueById(items);
+        writeCache(poolCacheKey, uniqueItems);
+        setSearchPool(uniqueItems);
+        setSearchPoolReady(true);
+      } catch {
+        if (!mounted) return;
+        setSearchPool([]);
+        setSearchPoolReady(false);
+      }
+    };
+
+    warmPool();
+
+    return () => {
+      mounted = false;
+    };
+  }, [poolCacheKey, gender, sort, cacheVersion]);
+
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
     setError("");
-    const requestPage = brand.trim() ? 0 : page;
-    const requestSize = brand.trim() ? 200 : size;
-    getAdminProducts({ page: requestPage, size: requestSize, gender, brand, sort })
+
+    const hasSearch = debouncedSearch.trim().length > 0;
+
+    if (searchPoolReady) {
+      // Once pool is ready, paginate locally for instant page switches.
+      const source = hasSearch ? filterBySearch(searchPool, debouncedSearch) : searchPool;
+      const uniqueItems = uniqueById(source);
+      const totalPages = Math.ceil(uniqueItems.length / size);
+      const safePage = Math.min(page, Math.max(totalPages - 1, 0));
+      const start = safePage * size;
+      const content = uniqueItems.slice(start, start + size);
+      setData({
+        content,
+        number: safePage,
+        totalPages,
+      });
+      if (safePage !== page) setPage(safePage);
+      setLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    if (hasSearch) {
+      if (!searchPoolReady) {
+        // Keep UI responsive while pool warms up in background.
+        setLoading(false);
+        return () => {
+          mounted = false;
+        };
+      }
+
+      const filtered = uniqueById(filterBySearch(searchPool, debouncedSearch));
+      const totalPages = Math.ceil(filtered.length / size);
+      const safePage = Math.min(page, Math.max(totalPages - 1, 0));
+      const start = safePage * size;
+      const content = filtered.slice(start, start + size);
+      setData({
+        content,
+        number: safePage,
+        totalPages,
+      });
+      if (safePage !== page) setPage(safePage);
+      setLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    const key = pageCacheKey(page);
+    const cached = readCacheWithTtl(key, ADMIN_CACHE_TTL_MS);
+    if (cached) {
+      setData({
+        ...cached,
+        content: uniqueById(cached?.content || []),
+      });
+      setLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    setLoading(true);
+
+    getAdminProducts({
+      page,
+      size,
+      gender,
+      brand: "",
+      sort,
+      signal: controller.signal,
+    })
       .then((res) => {
-        const content = filterByBrand(res?.content || []);
-        if (brand.trim()) {
-          setData({ content, totalPages: 1, number: 0 });
+        if (!mounted) return;
+        const next = {
+          ...res,
+          content: uniqueById(res?.content || []),
+        };
+        setData(next);
+        writeCache(key, next);
+      })
+      .catch((err) => {
+        if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") {
           return;
         }
-        setData({ ...res, content });
+        if (mounted) setError("Echec du chargement");
       })
-      .catch(() => setError("Echec du chargement"))
-      .finally(() => setLoading(false));
-  };
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [gender, debouncedSearch, page, size, sort, searchPool, searchPoolReady, cacheVersion]);
 
   useEffect(() => {
-    load();
-  }, [page, size, gender, brand, sort]);
+    if (debouncedSearch.trim()) return;
+    if (searchPoolReady) return;
+    const totalPages = Number(data?.totalPages || 0);
+    if (totalPages <= 1) return;
+
+    const toWarm = [];
+    if (page + 1 < totalPages) toWarm.push(page + 1);
+    if (page - 1 >= 0) toWarm.push(page - 1);
+
+    toWarm.forEach((targetPage) => {
+      const key = pageCacheKey(targetPage);
+      if (readCacheWithTtl(key, ADMIN_CACHE_TTL_MS)) return;
+      getAdminProducts({
+        page: targetPage,
+        size,
+        gender,
+        brand: "",
+        sort,
+      })
+        .then((res) => {
+          const next = {
+            ...res,
+            content: uniqueById(res?.content || []),
+          };
+          writeCache(key, next);
+        })
+        .catch(() => {});
+    });
+  }, [debouncedSearch, searchPoolReady, data?.totalPages, page, size, gender, sort, cacheVersion]);
 
   useEffect(() => {
-    setPage(0);
-  }, [gender, brand, sort]);
+    const prev = prevFiltersRef.current;
+    const changed =
+      prev.gender !== gender ||
+      prev.debouncedSearch !== debouncedSearch ||
+      prev.sort !== sort ||
+      prev.size !== size;
+
+    if (changed) {
+      setPage(0);
+    }
+
+    prevFiltersRef.current = {
+      gender,
+      debouncedSearch,
+      sort,
+      size,
+    };
+  }, [gender, debouncedSearch, sort, size]);
 
   const onDelete = async (id) => {
     if (deletingId !== null) return;
@@ -61,7 +288,7 @@ const AdminProducts = () => {
     try {
       await deleteAdminProduct(id);
       setMessage("Produit supprime");
-      load();
+      setCacheVersion((v) => v + 1);
     } catch (err) {
       const backendMessage =
         err?.response?.data?.message ||
@@ -72,6 +299,20 @@ const AdminProducts = () => {
       setDeletingId(null);
     }
   };
+
+  const hasSearch = debouncedSearch.trim().length > 0;
+  const fallbackSearchContent =
+    hasSearch && !searchPoolReady ? uniqueById(filterBySearch(data.content || [], debouncedSearch)) : data.content || [];
+
+  const effectiveData =
+    hasSearch && !searchPoolReady
+      ? {
+          ...data,
+          content: fallbackSearchContent,
+          number: 0,
+          totalPages: 0,
+        }
+      : data;
 
   return (
     <div className="page">
@@ -85,8 +326,8 @@ const AdminProducts = () => {
       <AdminFilters
         gender={gender}
         setGender={setGender}
-        brand={brand}
-        setBrand={setBrand}
+        brand={search}
+        setBrand={setSearch}
         sort={sort}
         setSort={setSort}
       />
@@ -113,7 +354,7 @@ const AdminProducts = () => {
                 </tr>
               </thead>
               <tbody>
-                {data.content?.map((p) => (
+                {effectiveData.content?.map((p) => (
                   <tr key={p.id}>
                     <td>{p.id}</td>
                     <td>
@@ -155,9 +396,10 @@ const AdminProducts = () => {
       </div>
 
       <AdminPagination
-        page={data.number || page}
-        totalPages={data.totalPages || 0}
+        page={effectiveData.number || page}
+        totalPages={effectiveData.totalPages || 0}
         onPageChange={setPage}
+        loading={loading}
       />
     </div>
   );
