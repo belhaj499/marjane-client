@@ -13,15 +13,31 @@ const AdminOrders = () => {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  const sortOrdersNewestFirst = (orders) => {
+    return [...(orders || [])].sort((a, b) => {
+      const aTs = Date.parse(a?.createdAt || "") || 0;
+      const bTs = Date.parse(b?.createdAt || "") || 0;
+      if (bTs !== aTs) return bTs - aTs;
+      return Number(b?.id || 0) - Number(a?.id || 0);
+    });
+  };
+
   const load = () => {
     setLoading(true);
     setError("");
     getAdminOrders({ page, size, status: "", sort: "createdAt,desc" })
       .then((res) => {
         if (Array.isArray(res)) {
-          setData({ content: res, totalPages: 1, number: 0 });
+          setData({
+            content: sortOrdersNewestFirst(res),
+            totalPages: 1,
+            number: 0,
+          });
         } else {
-          setData(res);
+          setData({
+            ...res,
+            content: sortOrdersNewestFirst(res?.content || []),
+          });
         }
       })
       .catch(() => setError("Echec du chargement"))
