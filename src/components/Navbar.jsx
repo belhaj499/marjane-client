@@ -1,5 +1,6 @@
 import { NavLink, Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import siteLogo from "../assets/site-logo.png";
 
 const NavIcon = ({ kind }) => {
   if (kind === "home") {
@@ -69,7 +70,12 @@ const Navbar = () => {
 
   return (
     <header className="nav">
-      <Link className="brand" to="/">Kadiri Parfum</Link>
+      <Link className="brand" to="/">
+        <span className="brand-logo-frame">
+          <img className="brand-logo" src={siteLogo} alt="Kadiri Parfum" />
+        </span>
+        <span className="brand-text">Kadiri Parfum</span>
+      </Link>
       <nav className="nav-links">
         <NavItem className={linkClass} to="/" icon="home">Accueil</NavItem>
         <NavItem className={linkClass} to="/homme" icon="man">Homme</NavItem>

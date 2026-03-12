@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../../api";
 import { saveAdminCredentials } from "../auth/adminAuth";
 import { writeCache } from "../../utils/productsWarmup";
+import siteLogo from "../../assets/site-logo.png";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -87,7 +88,9 @@ const AdminLogin = () => {
             </svg>
           </span>
         </a>
-        <h1>Admin Login</h1>
+        <div className="login-brand" aria-label="Kadiri Parfum">
+          <img src={siteLogo} alt="Kadiri Parfum" />
+        </div>
         <form className="form" onSubmit={onSubmit}>
           <div className="field">
             <label>Username</label>

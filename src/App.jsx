@@ -25,6 +25,7 @@ const RequireAdmin = ({ children }) => {
 const App = () => {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
+  const isAdminLogin = location.pathname === "/admin/login";
   const { toast } = useCart();
   const pageFallback = <p>Chargement...</p>;
 
@@ -43,6 +44,8 @@ const App = () => {
   if (isAdmin) {
     return (
       <div className="app">
+        {isAdminLogin && <Navbar />}
+        <Toast toast={toast} />
         <Suspense fallback={pageFallback}>
           <Routes>
             <Route path="/admin/login" element={<AdminLogin />} />
