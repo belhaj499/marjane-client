@@ -7,6 +7,10 @@ const DEFAULT_PAGE_SIZE = 12;
 
 const inflight = new Map();
 const LOCAL_PREFIX = "marjane_cache|";
+export const PRODUCT_CACHE_INVALIDATED_EVENT = "products-cache-invalidated";
+export const PRODUCT_CACHE_VERSION_KEY = `${LOCAL_PREFIX}version`;
+const CLIENT_CACHE_PREFIXES = ["products|", "products-pool|", "product-details|"];
+const ADMIN_CACHE_PREFIXES = ["admin-products|", "admin-products-pool|"];
 
 const uniqueById = (items) => {
   const seen = new Set();
@@ -56,6 +60,60 @@ export const writeCache = (key, data) => {
   }
   try {
     localStorage.setItem(`${LOCAL_PREFIX}${key}`, payload);
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
+const clearStorageKeysByPrefixes = (storage, prefixes) => {
+  try {
+    const keysToDelete = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (!key) continue;
+      if (prefixes.some((prefix) => key.startsWith(prefix))) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach((key) => storage.removeItem(key));
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
+const clearInflightByPrefixes = (prefixes) => {
+  Array.from(inflight.keys()).forEach((key) => {
+    if (prefixes.some((prefix) => key.startsWith(prefix))) {
+      inflight.delete(key);
+    }
+  });
+};
+
+export const invalidateProductCaches = () => {
+  clearStorageKeysByPrefixes(sessionStorage, [...CLIENT_CACHE_PREFIXES, ...ADMIN_CACHE_PREFIXES]);
+  clearStorageKeysByPrefixes(
+    localStorage,
+    [...CLIENT_CACHE_PREFIXES, ...ADMIN_CACHE_PREFIXES].map((prefix) => `${LOCAL_PREFIX}${prefix}`)
+  );
+  clearInflightByPrefixes([
+    "products|",
+    "products-pool|",
+    "product-details|",
+    "admin-products|",
+    "admin-products-pool|",
+    "first-page|",
+    "page|",
+  ]);
+  try {
+    const nextVersion = String(Date.now());
+    localStorage.setItem(PRODUCT_CACHE_VERSION_KEY, nextVersion);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent(PRODUCT_CACHE_INVALIDATED_EVENT, {
+          detail: { version: nextVersion },
+        })
+      );
+    }
   } catch {
     // Ignore storage failures.
   }

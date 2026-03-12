@@ -36,6 +36,7 @@ const App = () => {
         Promise.allSettled([
           warmupFirstProductsPage({ gender: "HOMME", sort: "price,asc" }),
           warmupFirstProductsPage({ gender: "FEMME", sort: "price,asc" }),
+          warmupFirstProductsPage({ gender: "UNISEX", sort: "price,asc" }),
         ])
       )
       .catch(() => {});
@@ -81,6 +82,7 @@ const App = () => {
             <Route path="/" element={<Home />} />
             <Route path="/homme" element={<Products gender="HOMME" />} />
             <Route path="/femme" element={<Products gender="FEMME" />} />
+            <Route path="/unisex" element={<Products gender="UNISEX" />} />
             <Route path="/products/:id" element={<ProductDetails />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />

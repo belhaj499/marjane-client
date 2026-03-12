@@ -10,8 +10,17 @@ import {
   extractImageUrls,
   stripProductMeta,
 } from "../utils/productSeasons";
+import {
+  PRODUCT_CACHE_INVALIDATED_EVENT,
+  PRODUCT_CACHE_VERSION_KEY,
+} from "../utils/productsWarmup";
 
 const PRODUCT_CACHE_TTL_MS = 10 * 60 * 1000;
+const genderRoutes = {
+  HOMME: "/homme",
+  FEMME: "/femme",
+  UNISEX: "/unisex",
+};
 
 const readProductCache = (id) => {
   try {
@@ -43,6 +52,14 @@ const writeProductCache = (id, data) => {
   }
 };
 
+const removeProductCache = (id) => {
+  try {
+    sessionStorage.removeItem(`product-details|${id}`);
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
 const ProductDetails = () => {
   const { id } = useParams();
   const location = useLocation();
@@ -58,6 +75,27 @@ const ProductDetails = () => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [loading, setLoading] = useState(() => !product);
   const [error, setError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
+
+  useEffect(() => {
+    const handleInvalidation = () => {
+      setRefreshVersion((value) => value + 1);
+    };
+
+    const handleStorage = (event) => {
+      if (event.key === PRODUCT_CACHE_VERSION_KEY) {
+        handleInvalidation();
+      }
+    };
+
+    window.addEventListener(PRODUCT_CACHE_INVALIDATED_EVENT, handleInvalidation);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener(PRODUCT_CACHE_INVALIDATED_EVENT, handleInvalidation);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -78,11 +116,24 @@ const ProductDetails = () => {
     getProductById(id)
       .then((res) => {
         if (!mounted) return;
+        if (res?.active === false) {
+          removeProductCache(id);
+          setProduct(null);
+          setError("Produit introuvable");
+          return;
+        }
         setProduct(res);
         writeProductCache(id, res);
       })
-      .catch(() => {
+      .catch((err) => {
         if (!mounted) return;
+        const status = err?.response?.status;
+        if (status === 404) {
+          removeProductCache(id);
+          setProduct(null);
+          setError("Produit introuvable");
+          return;
+        }
         if (!immediate) setError("Echec du chargement du produit");
       })
       .finally(() => {
@@ -92,7 +143,7 @@ const ProductDetails = () => {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [id, refreshVersion]);
 
   const imageList = (() => {
     const fromApi = Array.isArray(product?.imageUrls)
@@ -168,12 +219,9 @@ const ProductDetails = () => {
       navigate(-1);
       return;
     }
-    if (product.gender === "HOMME") {
-      navigate("/homme");
-      return;
-    }
-    if (product.gender === "FEMME") {
-      navigate("/femme");
+    const genderRoute = genderRoutes[product.gender];
+    if (genderRoute) {
+      navigate(genderRoute);
       return;
     }
     navigate("/");

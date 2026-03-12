@@ -6,6 +6,7 @@ import AdminFilters from "../components/AdminFilters";
 import { buildImageUrl } from "../../api/axios";
 import {
   ADMIN_CACHE_TTL_MS,
+  invalidateProductCaches,
   readCacheWithTtl,
   writeCache,
 } from "../../utils/productsWarmup";
@@ -287,6 +288,7 @@ const AdminProducts = () => {
     setDeletingId(id);
     try {
       await deleteAdminProduct(id);
+      invalidateProductCaches();
       setMessage("Produit supprime");
       setCacheVersion((v) => v + 1);
     } catch (err) {

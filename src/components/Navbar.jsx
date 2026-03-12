@@ -33,6 +33,16 @@ const NavIcon = ({ kind }) => {
       </svg>
     );
   }
+  if (kind === "unisex") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M17 3h4v4h-2V6.41l-2.63 2.63A4.97 4.97 0 0 1 17 12a5 5 0 0 1-4 4.9V19h3v2h-3v2h-2v-2H8v-2h3v-2.1A5 5 0 1 1 14.96 8.37L17.59 5H17V3zM8 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"
+          fill="currentColor"
+        />
+      </svg>
+    );
+  }
   if (kind === "cart") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -80,6 +90,7 @@ const Navbar = () => {
         <NavItem className={linkClass} to="/" icon="home">Accueil</NavItem>
         <NavItem className={linkClass} to="/homme" icon="man">Homme</NavItem>
         <NavItem className={linkClass} to="/femme" icon="woman">Femme</NavItem>
+        <NavItem className={linkClass} to="/unisex" icon="unisex">Unisex</NavItem>
         <NavItem className={linkClass} to="/cart" icon="cart">Panier ({count})</NavItem>
       </nav>
       <NavItem className="nav-link nav-link-right" to="/admin/login" icon="login">Connexion</NavItem>

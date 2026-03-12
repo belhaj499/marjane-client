@@ -7,6 +7,8 @@ import ProductCard from "../components/ProductCard";
 import Filters from "../components/Filters";
 import Pagination from "../components/Pagination";
 import {
+  PRODUCT_CACHE_INVALIDATED_EVENT,
+  PRODUCT_CACHE_VERSION_KEY,
   readCache,
   writeCache,
   warmupFirstProductsPage,
@@ -14,6 +16,15 @@ import {
   warmupProductsPool,
   warmupProductsPoolInBackground,
 } from "../utils/productsWarmup";
+
+const genderMeta = {
+  HOMME: { path: "/homme", label: "Homme", pageClass: "page page-homme" },
+  FEMME: { path: "/femme", label: "Femme", pageClass: "page page-femme" },
+  UNISEX: { path: "/unisex", label: "Unisex", pageClass: "page page-unisex" },
+};
+
+const keepVisibleProducts = (items) =>
+  (items || []).filter((product) => product?.active !== false);
 
 const Products = ({ gender }) => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -29,6 +40,7 @@ const Products = ({ gender }) => {
   const [data, setData] = useState({ content: [], totalPages: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [debouncedBrand, setDebouncedBrand] = useState("");
   const [searchPool, setSearchPool] = useState([]);
   const [searchPoolReady, setSearchPoolReady] = useState(false);
@@ -43,8 +55,9 @@ const Products = ({ gender }) => {
 
   const filterByBrand = (items, query) => {
     const q = String(query || "").trim().toLowerCase();
-    if (!q) return items || [];
-    return (items || []).filter((p) => {
+    const visibleItems = keepVisibleProducts(items);
+    if (!q) return visibleItems;
+    return visibleItems.filter((p) => {
       const brandText = String(p.brand || "").toLowerCase();
       const nameText = String(p.name || "").toLowerCase();
       return brandText.includes(q) || nameText.includes(q);
@@ -70,6 +83,29 @@ const Products = ({ gender }) => {
   }, [brand]);
 
   useEffect(() => {
+    const handleInvalidation = () => {
+      setSearchPool([]);
+      setSearchPoolReady(false);
+      setData({ content: [], totalPages: 0, number: 0 });
+      setRefreshVersion((value) => value + 1);
+    };
+
+    const handleStorage = (event) => {
+      if (event.key === PRODUCT_CACHE_VERSION_KEY) {
+        handleInvalidation();
+      }
+    };
+
+    window.addEventListener(PRODUCT_CACHE_INVALIDATED_EVENT, handleInvalidation);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener(PRODUCT_CACHE_INVALIDATED_EVENT, handleInvalidation);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
     // Reset search pool when context changes. We only load full pool on-demand (when searching).
     setSearchPool([]);
     setSearchPoolReady(false);
@@ -79,7 +115,7 @@ const Products = ({ gender }) => {
     warmupProductsPoolInBackground({ gender, sort })
       .then((items) => {
         if (!mounted) return;
-        setSearchPool(items);
+        setSearchPool(keepVisibleProducts(items));
         setSearchPoolReady(true);
       })
       .catch(() => {});
@@ -87,12 +123,14 @@ const Products = ({ gender }) => {
     return () => {
       mounted = false;
     };
-  }, [gender, sort]);
+  }, [gender, sort, refreshVersion]);
 
   useEffect(() => {
-    const otherGender = gender === "HOMME" ? "FEMME" : "HOMME";
+    const otherGenders = Object.keys(genderMeta).filter((item) => item !== gender);
     // Warm next likely navigation target to avoid long wait when switching tabs.
-    warmupFirstProductsPage({ gender: otherGender, sort }).catch(() => {});
+    Promise.allSettled(
+      otherGenders.map((targetGender) => warmupFirstProductsPage({ gender: targetGender, sort }))
+    ).catch(() => {});
   }, [gender, sort]);
 
   useEffect(() => {
@@ -107,7 +145,7 @@ const Products = ({ gender }) => {
     const poolCacheKey = `products-pool|${gender}|${sort}`;
     const cached = readCache(poolCacheKey);
     if (cached) {
-      setSearchPool(Array.isArray(cached) ? cached : []);
+      setSearchPool(keepVisibleProducts(Array.isArray(cached) ? cached : []));
       setSearchPoolReady(true);
       return () => {
         mounted = false;
@@ -118,7 +156,7 @@ const Products = ({ gender }) => {
     warmupProductsPool({ gender, sort })
       .then((items) => {
         if (!mounted) return;
-        setSearchPool(items);
+        setSearchPool(keepVisibleProducts(items));
         setSearchPoolReady(true);
       })
       .catch(() => {
@@ -130,7 +168,7 @@ const Products = ({ gender }) => {
     return () => {
       mounted = false;
     };
-  }, [gender, sort, debouncedBrand]);
+  }, [gender, sort, debouncedBrand, refreshVersion]);
 
   useEffect(() => {
     let mounted = true;
@@ -173,7 +211,7 @@ const Products = ({ gender }) => {
     if (cached) {
       setData({
         ...cached,
-        content: uniqueById(cached?.content || []),
+        content: uniqueById(keepVisibleProducts(cached?.content || [])),
       });
       setLoading(false);
       return () => {
@@ -188,7 +226,7 @@ const Products = ({ gender }) => {
         if (!mounted) return;
         const next = {
           ...res,
-          content: uniqueById(res?.content || []),
+          content: uniqueById(keepVisibleProducts(res?.content || [])),
         };
         setData(next);
         writeCache(pageCacheKey, next);
@@ -207,7 +245,7 @@ const Products = ({ gender }) => {
       mounted = false;
       controller.abort();
     };
-  }, [gender, debouncedBrand, page, size, sort, searchPool, searchPoolReady]);
+  }, [gender, debouncedBrand, page, size, sort, searchPool, searchPoolReady, refreshVersion]);
 
   useEffect(() => {
     if (debouncedBrand.trim()) return;
@@ -226,7 +264,7 @@ const Products = ({ gender }) => {
         sort,
       }).catch(() => {});
     });
-  }, [debouncedBrand, data?.totalPages, gender, page, size, sort]);
+  }, [debouncedBrand, data?.totalPages, gender, page, size, sort, refreshVersion]);
 
   useEffect(() => {
     const prev = prevFiltersRef.current;
@@ -257,7 +295,7 @@ const Products = ({ gender }) => {
   }, [brand, sort, page, setSearchParams]);
 
   useEffect(() => {
-    const path = gender === "HOMME" ? "/homme" : "/femme";
+    const path = genderMeta[gender]?.path || "/";
     const next = new URLSearchParams();
     if (brand.trim()) next.set("brand", brand.trim());
     if (sort !== "price,asc") next.set("sort", sort);
@@ -279,13 +317,12 @@ const Products = ({ gender }) => {
     listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [page, debouncedBrand, sort, gender]);
 
-  const pageClass =
-    gender === "HOMME" ? "page page-homme" : "page page-femme";
+  const pageClass = genderMeta[gender]?.pageClass || "page";
   const hasBrandFilter = debouncedBrand.trim().length > 0;
   const fallbackSearchContent =
     hasBrandFilter && !searchPoolReady
       ? uniqueById(filterByBrand(data.content || [], debouncedBrand))
-      : data.content || [];
+      : keepVisibleProducts(data.content || []);
   const effectiveData =
     hasBrandFilter && !searchPoolReady
       ? {
@@ -296,7 +333,7 @@ const Products = ({ gender }) => {
         }
       : data;
   const fromPath = (() => {
-    const path = gender === "HOMME" ? "/homme" : "/femme";
+    const path = genderMeta[gender]?.path || "/";
     const next = new URLSearchParams();
     if (brand.trim()) next.set("brand", brand.trim());
     if (sort !== "price,asc") next.set("sort", sort);
@@ -309,7 +346,7 @@ const Products = ({ gender }) => {
   return (
     <>
       <div className={pageClass}>
-        <h1 ref={listTopRef}>Parfums {gender === "HOMME" ? "Homme" : "Femme"}</h1>
+        <h1 ref={listTopRef}>Parfums {genderMeta[gender]?.label || gender}</h1>
         <Filters
           brand={brand}
           setBrand={setBrand}

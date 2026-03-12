@@ -7,6 +7,7 @@ const AdminFilters = ({ gender, setGender, brand, setBrand, sort, setSort }) => 
           <option value="">Tous</option>
           <option value="HOMME">Homme</option>
           <option value="FEMME">Femme</option>
+          <option value="UNISEX">Unisex</option>
         </select>
       </div>
       <div className="field">

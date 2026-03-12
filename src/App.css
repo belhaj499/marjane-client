@@ -97,6 +97,15 @@
   padding: 1.5rem;
 }
 
+.page-unisex {
+  background:
+    radial-gradient(600px 300px at 50% 0%, rgba(255, 255, 255, 0.45), transparent 65%),
+    linear-gradient(135deg, #dde8e4 0%, #f4f7f5 100%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0, rgba(255, 255, 255, 0.22) 2px, transparent 2px, transparent 12px);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+
 .hero {
   display: grid;
   gap: 1.25rem;
@@ -238,6 +247,10 @@
   background: radial-gradient(circle, #f2b9cf, transparent 70%);
 }
 
+.split-unisex::after {
+  background: radial-gradient(circle, #a9c4bb, transparent 70%);
+}
+
 .split-homme {
   background:
     linear-gradient(120deg, rgba(255, 250, 246, 0.85), rgba(255, 250, 246, 0.7)),
@@ -249,6 +262,13 @@
   background:
     linear-gradient(120deg, rgba(255, 250, 246, 0.85), rgba(255, 250, 246, 0.7)),
     url("https://images.unsplash.com/photo-1688509453728-8f612a267393?auto=format&fit=crop&fm=jpg&ixlib=rb-4.1.0&q=80&w=1600")
+      center/cover no-repeat;
+}
+
+.split-unisex {
+  background:
+    linear-gradient(120deg, rgba(249, 252, 250, 0.88), rgba(245, 249, 247, 0.76)),
+    url("https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&fm=jpg&ixlib=rb-4.1.0&q=80&w=1600")
       center/cover no-repeat;
 }
 
@@ -1938,7 +1958,7 @@
 
   .nav-links {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.35rem;
     align-items: center;
     justify-items: center;
@@ -2023,6 +2043,7 @@
 
   .page-homme,
   .page-femme,
+  .page-unisex,
   .split-card,
   .contact-card {
     padding: 1rem;

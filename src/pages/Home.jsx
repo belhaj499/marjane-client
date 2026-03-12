@@ -91,6 +91,11 @@ const Home = () => {
           <p>Floral, doux, elegant.</p>
           <Link className="btn btn-primary" to="/femme">Explorer Femme</Link>
         </div>
+        <div className="split-card split-unisex">
+          <h2>Unisex</h2>
+          <p>Equilibre, moderne, pour tous.</p>
+          <Link className="btn btn-primary" to="/unisex">Explorer Unisex</Link>
+        </div>
       </section>
 
       <section className="brand-row">
