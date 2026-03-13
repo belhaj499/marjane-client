@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, Link } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Toast from "./components/Toast";
 import { isAdminLoggedIn } from "./admin/auth/adminAuth";
@@ -20,6 +20,31 @@ const AdminLayout = lazy(() => import("./admin/components/AdminLayout"));
 
 const RequireAdmin = ({ children }) => {
   return isAdminLoggedIn() ? children : <Navigate to="/admin/login" replace />;
+};
+
+const FloatingCart = () => {
+  const location = useLocation();
+  const { count } = useCart();
+  const allowedPaths = ["/homme", "/femme", "/unisex"];
+
+  if (!allowedPaths.includes(location.pathname)) {
+    return null;
+  }
+
+  return (
+    <Link className="floating-cart" to="/cart" aria-label={`Panier ${count} articles`}>
+      <span className="floating-cart-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M3 4h2l2.1 10.2A2 2 0 0 0 9.06 16H18a2 2 0 0 0 1.93-1.48L22 7H7.1L6.7 5H3zm6 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
+            fill="currentColor"
+          />
+        </svg>
+      </span>
+      <span className="floating-cart-text">Panier</span>
+      <span className="floating-cart-badge">{count}</span>
+    </Link>
+  );
 };
 
 const App = () => {
@@ -75,6 +100,7 @@ const App = () => {
   return (
     <div className="app">
       <Navbar />
+      <FloatingCart />
       <Toast toast={toast} />
       <main className="container">
         <Suspense fallback={pageFallback}>

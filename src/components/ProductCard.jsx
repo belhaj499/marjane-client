@@ -1,7 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { buildImageUrl } from "../api/axios";
 import { useCart } from "../context/CartContext";
-import { extractSeasonTags, extractWearTags } from "../utils/productSeasons";
 
 const ProductCard = ({ product, fromPath }) => {
   const { addToCart } = useCart();
@@ -21,8 +20,6 @@ const ProductCard = ({ product, fromPath }) => {
     ? product.imageUrls[0]
     : product?.imageUrl;
   const image = buildImageUrl(primaryImage);
-  const seasons = extractSeasonTags(product.description).slice(0, 2);
-  const wearTags = extractWearTags(product.description).slice(0, 2);
 
   return (
     <div className="card">
@@ -43,24 +40,6 @@ const ProductCard = ({ product, fromPath }) => {
         <p className="card-sub">
           {product.brand} - {product.gender}
         </p>
-        {seasons.length > 0 && (
-          <div className="season-tags">
-            {seasons.map((s) => (
-              <span key={s} className="season-tag">
-                {s}
-              </span>
-            ))}
-          </div>
-        )}
-        {wearTags.length > 0 && (
-          <div className="season-tags">
-            {wearTags.map((w) => (
-              <span key={w} className="season-tag season-tag-alt">
-                {w}
-              </span>
-            ))}
-          </div>
-        )}
         <div className="card-row">
           <span className="price">{product.price.toFixed(2)} DH</span>
         </div>
