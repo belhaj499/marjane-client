@@ -342,6 +342,7 @@ const Products = ({ gender }) => {
     return query ? `${path}?${query}` : path;
   })();
   const showGlobalSpinner = loading && !(hasBrandFilter && !searchPoolReady);
+  const showEmptyState = !loading && !error && (effectiveData.content?.length || 0) === 0;
 
   return (
     <>
@@ -357,11 +358,27 @@ const Products = ({ gender }) => {
         {error && <p className="error">{error}</p>}
 
         <div className="products-stage">
-          <div className="grid">
-            {effectiveData.content?.map((p) => (
-              <ProductCard key={p.id} product={p} fromPath={fromPath} />
-            ))}
-          </div>
+          {showEmptyState ? (
+            <div className="products-empty">
+              <h2>Aucun parfum trouve</h2>
+              <p>
+                {hasBrandFilter
+                  ? `Aucun resultat pour "${brand.trim()}". Essayez un autre nom ou effacez la recherche.`
+                  : "Aucun parfum disponible pour le moment."}
+              </p>
+              {hasBrandFilter && (
+                <button className="btn btn-primary" onClick={() => setBrand("")}>
+                  Effacer la recherche
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid">
+              {effectiveData.content?.map((p) => (
+                <ProductCard key={p.id} product={p} fromPath={fromPath} />
+              ))}
+            </div>
+          )}
         </div>
 
         <Pagination
