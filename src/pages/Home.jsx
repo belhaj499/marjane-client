@@ -206,7 +206,7 @@ const Home = () => {
           </a>
           <a
             className="btn btn-whatsapp"
-            href="https://wa.me/212536256018"
+            href="https://wa.me/212661407755"
             target="_blank"
             rel="noreferrer"
           >
