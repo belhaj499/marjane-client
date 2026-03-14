@@ -156,26 +156,8 @@ const AdminProducts = () => {
     }
 
     if (hasSearch) {
-      if (!searchPoolReady) {
-        // Keep UI responsive while pool warms up in background.
-        setLoading(false);
-        return () => {
-          mounted = false;
-        };
-      }
-
-      const filtered = uniqueById(filterBySearch(searchPool, debouncedSearch));
-      const totalPages = Math.ceil(filtered.length / size);
-      const safePage = Math.min(page, Math.max(totalPages - 1, 0));
-      const start = safePage * size;
-      const content = filtered.slice(start, start + size);
-      setData({
-        content,
-        number: safePage,
-        totalPages,
-      });
-      if (safePage !== page) setPage(safePage);
-      setLoading(false);
+      // Avoid showing false "no results" while the full searchable pool is still loading.
+      setLoading(true);
       return () => {
         mounted = false;
       };
@@ -303,18 +285,8 @@ const AdminProducts = () => {
   };
 
   const hasSearch = debouncedSearch.trim().length > 0;
-  const fallbackSearchContent =
-    hasSearch && !searchPoolReady ? uniqueById(filterBySearch(data.content || [], debouncedSearch)) : data.content || [];
-
-  const effectiveData =
-    hasSearch && !searchPoolReady
-      ? {
-          ...data,
-          content: fallbackSearchContent,
-          number: 0,
-          totalPages: 0,
-        }
-      : data;
+  const effectiveData = data;
+  const showSearchLoading = hasSearch && !searchPoolReady;
 
   return (
     <div className="page">
@@ -334,7 +306,7 @@ const AdminProducts = () => {
         setSort={setSort}
       />
 
-      {loading && <p>Chargement...</p>}
+      {(loading || showSearchLoading) && <p>Chargement...</p>}
       {error && <p className="error">{error}</p>}
       {message && <p className="message">{message}</p>}
 
@@ -356,7 +328,8 @@ const AdminProducts = () => {
                 </tr>
               </thead>
               <tbody>
-                {effectiveData.content?.map((p) => (
+                {!showSearchLoading &&
+                  effectiveData.content?.map((p) => (
                   <tr key={p.id}>
                     <td>{p.id}</td>
                     <td>
@@ -399,9 +372,9 @@ const AdminProducts = () => {
 
       <AdminPagination
         page={effectiveData.number || page}
-        totalPages={effectiveData.totalPages || 0}
+        totalPages={showSearchLoading ? 0 : effectiveData.totalPages || 0}
         onPageChange={setPage}
-        loading={loading}
+        loading={loading || showSearchLoading}
       />
     </div>
   );

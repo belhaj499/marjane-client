@@ -1,8 +1,9 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
   createAdminProduct,
   getAdminProductById,
+  syncAdminProductImages,
   updateAdminProduct,
   uploadAdminProductImage,
   uploadAdminProductImages,
@@ -74,6 +75,15 @@ const hydrateProductState = ({
   setInitialImageUrls(images);
 };
 
+const makePendingImage = (file) => ({
+  file,
+  previewUrl: URL.createObjectURL(file),
+});
+
+const revokePendingImage = (image) => {
+  if (image?.previewUrl) URL.revokeObjectURL(image.previewUrl);
+};
+
 const AdminProductForm = () => {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -86,6 +96,9 @@ const AdminProductForm = () => {
   const [initialWearTags, setInitialWearTags] = useState([]);
   const [imageUrls, setImageUrls] = useState([]);
   const [initialImageUrls, setInitialImageUrls] = useState([]);
+  const [pendingPrimaryImage, setPendingPrimaryImage] = useState(null);
+  const [pendingGalleryImages, setPendingGalleryImages] = useState([]);
+  const [zoomedImage, setZoomedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -108,6 +121,14 @@ const AdminProductForm = () => {
       )
       .finally(() => setLoading(false));
   }, [id, isEdit]);
+
+  useEffect(
+    () => () => {
+      revokePendingImage(pendingPrimaryImage);
+      pendingGalleryImages.forEach(revokePendingImage);
+    },
+    [pendingGalleryImages, pendingPrimaryImage]
+  );
 
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -159,12 +180,22 @@ const AdminProductForm = () => {
     return changed;
   };
 
+  const clearPendingUploads = () => {
+    revokePendingImage(pendingPrimaryImage);
+    pendingGalleryImages.forEach(revokePendingImage);
+    setPendingPrimaryImage(null);
+    setPendingGalleryImages([]);
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
     setLoading(true);
     try {
       const payload = buildPayload();
+      let productId = id;
+      let currentProduct = null;
+
       if (isEdit) {
         const previous = {
           ...initialForm,
@@ -182,52 +213,53 @@ const AdminProductForm = () => {
         };
         const changedPayload = buildChangedPayload(payload, previous);
         const galleryChanged = !areSameImages(imageUrls, initialImageUrls);
+        const hasPendingUploads = Boolean(pendingPrimaryImage) || pendingGalleryImages.length > 0;
 
-        if (Object.keys(changedPayload).length === 0 && !galleryChanged) {
+        if (Object.keys(changedPayload).length === 0 && !galleryChanged && !hasPendingUploads) {
           setMessage("Aucune modification detectee");
-          setLoading(false);
           return;
         }
-        let updated = null;
+
         if (Object.keys(changedPayload).length > 0 || galleryChanged) {
-          const payloadWithGallery = { ...changedPayload, imageUrls };
-          updated = await updateAdminProduct(id, payloadWithGallery);
-        }
-        if (updated) {
-          invalidateProductCaches();
-          hydrateProductState({
-            product: updated,
-            setForm,
-            setInitialForm,
-            setSeasonTags,
-            setInitialSeasonTags,
-            setWearTags,
-            setInitialWearTags,
-            setImageUrls,
-            setInitialImageUrls,
-          });
+          currentProduct = await updateAdminProduct(id, { ...changedPayload, imageUrls });
         } else {
-          const refreshed = await getAdminProductById(id);
-          invalidateProductCaches();
-          hydrateProductState({
-            product: refreshed,
-            setForm,
-            setInitialForm,
-            setSeasonTags,
-            setInitialSeasonTags,
-            setWearTags,
-            setInitialWearTags,
-            setImageUrls,
-            setInitialImageUrls,
-          });
+          currentProduct = await getAdminProductById(id);
         }
-        setMessage("Produit mis a jour");
-        navigate("/admin/products", { replace: true });
       } else {
-        await createAdminProduct(payload);
-        invalidateProductCaches();
-        navigate("/admin/products", { replace: true });
+        currentProduct = await createAdminProduct(payload);
+        productId = currentProduct.id;
       }
+
+      if (pendingPrimaryImage?.file && productId) {
+        currentProduct = await uploadAdminProductImage(productId, pendingPrimaryImage.file);
+      }
+
+      if (pendingGalleryImages.length > 0 && productId) {
+        currentProduct = await uploadAdminProductImages(
+          productId,
+          pendingGalleryImages.map((image) => image.file)
+        );
+      }
+
+      if (productId) {
+        const refreshed = currentProduct || (await getAdminProductById(productId));
+        invalidateProductCaches();
+        hydrateProductState({
+          product: refreshed,
+          setForm,
+          setInitialForm,
+          setSeasonTags,
+          setInitialSeasonTags,
+          setWearTags,
+          setInitialWearTags,
+          setImageUrls,
+          setInitialImageUrls,
+        });
+      }
+
+      clearPendingUploads();
+      setMessage(isEdit ? "Produit mis a jour" : "Produit cree");
+      navigate("/admin/products", { replace: true });
     } catch {
       setMessage("Echec de l'enregistrement");
     } finally {
@@ -235,90 +267,21 @@ const AdminProductForm = () => {
     }
   };
 
-  const ensureProductExistsForUpload = async () => {
-    if (id) return id;
-    if (!form.name || !form.brand) {
-      setMessage("Remplir au moins Nom et Marque avant l'upload.");
-      return null;
-    }
-
-    const created = await createAdminProduct(buildPayload());
-    hydrateProductState({
-      product: created,
-      setForm,
-      setInitialForm,
-      setSeasonTags,
-      setInitialSeasonTags,
-      setWearTags,
-      setInitialWearTags,
-      setImageUrls,
-      setInitialImageUrls,
-    });
-
-    if (!isEdit) navigate(`/admin/products/${created.id}/edit`, { replace: true });
-    return created.id;
-  };
-
-  const onUploadPrimaryImage = async (e) => {
+  const onSelectPrimaryImage = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setMessage("");
-    setLoading(true);
-    try {
-      const productId = await ensureProductExistsForUpload();
-      if (!productId) return;
-
-      const updated = await uploadAdminProductImage(productId, file);
-      invalidateProductCaches();
-      hydrateProductState({
-        product: updated,
-        setForm,
-        setInitialForm,
-        setSeasonTags,
-        setInitialSeasonTags,
-        setWearTags,
-        setInitialWearTags,
-        setImageUrls,
-        setInitialImageUrls,
-      });
-      setMessage("Image principale telechargee.");
-    } catch {
-      setMessage("Echec upload image principale");
-    } finally {
-      setLoading(false);
-      e.target.value = "";
-    }
+    revokePendingImage(pendingPrimaryImage);
+    setPendingPrimaryImage(makePendingImage(file));
+    setMessage("Image principale selectionnee. Clique sur Enregistrer pour l'envoyer.");
+    e.target.value = "";
   };
 
-  const onUploadGalleryImages = async (e) => {
+  const onSelectGalleryImages = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    setMessage("");
-    setLoading(true);
-    try {
-      const productId = await ensureProductExistsForUpload();
-      if (!productId) return;
-
-      const updated = await uploadAdminProductImages(productId, files);
-      invalidateProductCaches();
-      hydrateProductState({
-        product: updated,
-        setForm,
-        setInitialForm,
-        setSeasonTags,
-        setInitialSeasonTags,
-        setWearTags,
-        setInitialWearTags,
-        setImageUrls,
-        setInitialImageUrls,
-      });
-      setMessage(files.length > 1 ? "Images secondaires telechargees." : "Image secondaire telechargee.");
-    } catch {
-      setMessage("Echec upload images secondaires");
-    } finally {
-      setLoading(false);
-      e.target.value = "";
-    }
+    setPendingGalleryImages((prev) => [...prev, ...files.map(makePendingImage)]);
+    setMessage("Images secondaires selectionnees. Clique sur Enregistrer pour les envoyer.");
+    e.target.value = "";
   };
 
   const removeImage = (imageToRemove) => {
@@ -326,6 +289,19 @@ const AdminProductForm = () => {
       const next = prev.filter((url) => url !== imageToRemove);
       setForm((curr) => ({ ...curr, imageUrl: next[0] || "" }));
       return next;
+    });
+  };
+
+  const removePendingPrimaryImage = () => {
+    revokePendingImage(pendingPrimaryImage);
+    setPendingPrimaryImage(null);
+  };
+
+  const removePendingGalleryImage = (previewUrl) => {
+    setPendingGalleryImages((prev) => {
+      const image = prev.find((item) => item.previewUrl === previewUrl);
+      revokePendingImage(image);
+      return prev.filter((item) => item.previewUrl !== previewUrl);
     });
   };
 
@@ -420,36 +396,105 @@ const AdminProductForm = () => {
         <div className="field">
           <label>Image principale</label>
           {imageUrls[0] && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-              <div style={{ position: "relative" }}>
-                <img src={buildImageUrl(imageUrls[0])} alt="Image principale" width="90" height="90" style={{ objectFit: "cover", borderRadius: 10, border: "1px solid #e6d7cc" }} />
+            <div className="image-preview-list">
+              <div className="image-preview-card">
                 <button
                   type="button"
-                  className="btn"
+                  className="image-preview-zoom"
+                  onClick={() =>
+                    setZoomedImage({
+                      src: buildImageUrl(imageUrls[0]),
+                      alt: "Image principale",
+                    })
+                  }
+                >
+                  <img
+                    src={buildImageUrl(imageUrls[0])}
+                    alt="Image principale"
+                    width="90"
+                    height="90"
+                    className="image-preview-thumb"
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="image-preview-remove"
                   onClick={() => removeImage(imageUrls[0])}
-                  style={{ position: "absolute", right: 4, top: 4, padding: "0.15rem 0.45rem", fontSize: 12 }}
                 >
                   x
                 </button>
               </div>
             </div>
           )}
-          <input type="file" accept="image/*" onChange={onUploadPrimaryImage} />
-          <small className="muted">Cette image sera la photo principale du parfum.</small>
+          {pendingPrimaryImage && (
+            <div className="pending-upload-block">
+              <p className="pending-upload-label">Nouvelle image principale selectionnee</p>
+              <div className="image-preview-list">
+                <div className="image-preview-card">
+                  <button
+                    type="button"
+                    className="image-preview-zoom"
+                    onClick={() =>
+                      setZoomedImage({
+                        src: pendingPrimaryImage.previewUrl,
+                        alt: pendingPrimaryImage.file.name,
+                      })
+                    }
+                  >
+                    <img
+                      src={pendingPrimaryImage.previewUrl}
+                      alt={pendingPrimaryImage.file.name}
+                      width="90"
+                      height="90"
+                      className="image-preview-thumb"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    className="image-preview-remove"
+                    onClick={removePendingPrimaryImage}
+                  >
+                    x
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <input type="file" accept="image/*" onChange={onSelectPrimaryImage} />
+          <small className="muted">
+            Cette image sera la photo principale du parfum. L'envoi se fait apres clic sur
+            Enregistrer.
+          </small>
         </div>
 
         <div className="field">
           <label>Images secondaires</label>
-          {imageUrls.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          {imageUrls.length > 1 && (
+            <div className="image-preview-list">
               {imageUrls.slice(1).map((url, idx) => (
-                <div key={`${url}-${idx}`} style={{ position: "relative" }}>
-                  <img src={buildImageUrl(url)} alt={`Produit secondaire ${idx + 1}`} width="90" height="90" style={{ objectFit: "cover", borderRadius: 10, border: "1px solid #e6d7cc" }} />
+                <div key={`${url}-${idx}`} className="image-preview-card">
                   <button
                     type="button"
-                    className="btn"
+                    className="image-preview-zoom"
+                    onClick={() =>
+                      setZoomedImage({
+                        src: buildImageUrl(url),
+                        alt: `Produit secondaire ${idx + 1}`,
+                      })
+                    }
+                  >
+                    <img
+                      src={buildImageUrl(url)}
+                      alt={`Produit secondaire ${idx + 1}`}
+                      width="90"
+                      height="90"
+                      className="image-preview-thumb"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    className="image-preview-remove"
                     onClick={() => removeImage(url)}
-                    style={{ position: "absolute", right: 4, top: 4, padding: "0.15rem 0.45rem", fontSize: 12 }}
                   >
                     x
                   </button>
@@ -457,19 +502,77 @@ const AdminProductForm = () => {
               ))}
             </div>
           )}
-          <input type="file" accept="image/*" multiple onChange={onUploadGalleryImages} />
-          <small className="muted">Ces images apparaitront apres la photo principale. N'oublie pas Enregistrer.</small>
+          {pendingGalleryImages.length > 0 && (
+            <div className="pending-upload-block">
+              <p className="pending-upload-label">
+                {pendingGalleryImages.length} image(s) secondaire(s) selectionnee(s)
+              </p>
+              <div className="image-preview-list">
+                {pendingGalleryImages.map((image) => (
+                  <div key={image.previewUrl} className="image-preview-card">
+                    <button
+                      type="button"
+                      className="image-preview-zoom"
+                      onClick={() =>
+                        setZoomedImage({
+                          src: image.previewUrl,
+                          alt: image.file.name,
+                        })
+                      }
+                    >
+                      <img
+                        src={image.previewUrl}
+                        alt={image.file.name}
+                        width="90"
+                        height="90"
+                        className="image-preview-thumb"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      className="image-preview-remove"
+                      onClick={() => removePendingGalleryImage(image.previewUrl)}
+                    >
+                      x
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <input type="file" accept="image/*" multiple onChange={onSelectGalleryImages} />
+          <small className="muted">
+            Ces images apparaitront apres la photo principale. L'envoi se fait apres clic sur
+            Enregistrer.
+          </small>
         </div>
 
         <div className="card-actions">
           <button className="btn btn-primary" type="submit" disabled={loading}>
             {loading ? "En cours..." : "Enregistrer"}
           </button>
-          <Link className="btn" to="/admin/products">Retour</Link>
+          <Link className="btn" to="/admin/products">
+            Retour
+          </Link>
         </div>
 
         {message && <p className="message">{message}</p>}
       </form>
+
+      {zoomedImage && (
+        <div className="image-zoom-overlay" onClick={() => setZoomedImage(null)}>
+          <div className="image-zoom-dialog" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="image-zoom-close"
+              onClick={() => setZoomedImage(null)}
+            >
+              x
+            </button>
+            <img className="image-zoom-full" src={zoomedImage.src} alt={zoomedImage.alt} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

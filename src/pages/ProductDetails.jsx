@@ -146,14 +146,19 @@ const ProductDetails = () => {
   }, [id, refreshVersion]);
 
   const imageList = (() => {
-    const fromApi = Array.isArray(product?.imageUrls)
-      ? product.imageUrls.map((url) => buildImageUrl(url)).filter(Boolean)
-      : [];
-    if (fromApi.length > 0) return fromApi;
+    const ordered = [
+      product?.imageUrl,
+      ...(Array.isArray(product?.imageUrls) ? product.imageUrls : []),
+    ]
+      .filter(Boolean)
+      .filter((url, index, arr) => arr.indexOf(url) === index)
+      .map((url) => buildImageUrl(url))
+      .filter(Boolean);
+    if (ordered.length > 0) return ordered;
 
     const fromMeta = extractImageUrls(product?.description).map((url) => buildImageUrl(url));
     if (fromMeta.length > 0) return fromMeta;
-    return product?.imageUrl ? [buildImageUrl(product.imageUrl)] : [];
+    return [];
   })();
   const image = imageList[activeImageIndex] || "";
   const seasons = extractSeasonTags(product?.description);

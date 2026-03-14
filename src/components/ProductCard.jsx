@@ -2,6 +2,14 @@ import { Link, useLocation } from "react-router-dom";
 import { buildImageUrl } from "../api/axios";
 import { useCart } from "../context/CartContext";
 
+const resolvePrimaryImage = (product) => {
+  const ordered = [
+    product?.imageUrl,
+    ...(Array.isArray(product?.imageUrls) ? product.imageUrls : []),
+  ].filter(Boolean);
+  return ordered[0] || "";
+};
+
 const ProductCard = ({ product, fromPath }) => {
   const { addToCart } = useCart();
   const location = useLocation();
@@ -16,9 +24,7 @@ const ProductCard = ({ product, fromPath }) => {
       // Ignore storage failures.
     }
   };
-  const primaryImage = Array.isArray(product?.imageUrls) && product.imageUrls.length > 0
-    ? product.imageUrls[0]
-    : product?.imageUrl;
+  const primaryImage = resolvePrimaryImage(product);
   const image = buildImageUrl(primaryImage);
 
   return (
